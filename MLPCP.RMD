@@ -1,0 +1,155 @@
+---
+title: "Machine Learning Class Project"
+author: "Randall"
+date: "April 27, 2018"
+output: html_document
+---
+
+#Overview:
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+#Data:
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+I downloaded the two datasets and read them into R:
+
+
+```{r setup1, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#load the libraries to be used
+
+library(caret)
+library(ggplot2)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+
+#set the seed
+set.seed(4321)
+
+#load the training and test datasets
+
+trainingdata<-read.csv("training.csv",na.strings=c("NA","#DIV/0!", ""))
+
+testingdata<-read.csv("testing.csv",na.strings=c("NA","#DIV/0!", ""))
+
+dim(trainingdata)
+
+```
+WE take a look at the data...There are 19622 observations and 160 variables. The variable "classe" contains five levels: A,B,C,D, and E. We can look at the frequency of each.
+
+```{r setup2, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+dim(trainingdata)
+table(trainingdata$classe)
+
+```
+#Preprocessing of Data
+
+Here we separate our training data into a training set (80%) and a validation set (20%), as we attempt to validate our model.
+
+```{r setup3, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+#set the seed and load the caret package
+library(caret)
+set.seed(4321)
+trainingset<- createDataPartition(trainingdata$classe,p=0.8,list=FALSE)
+training<-trainingdata[trainingset, ]
+validation<-trainingdata[-trainingset, ]
+dim(training)
+dim(validation)
+
+
+```
+
+#Feature Selection
+
+We'll now clean up the data so that we only have the variables we need for our model. We'll remove variables with near zero variance, variables that aren't useful as predictors, and variables with missing data.
+
+```{r setup4, include=TRUE}
+
+
+
+# exclude near zero variance features
+nzvcol <- nearZeroVar(training)
+training <- training[, -nzvcol]
+
+# exclude columns with 40% or more missing values exclude descriptive
+# columns like name etc
+cntlength <- sapply(training, function(x) {
+    sum(!(is.na(x) | x == ""))
+})
+nullcol <- names(cntlength[cntlength < 0.6 * length(training$classe)])
+descriptcol <- c("X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", 
+    "cvtd_timestamp", "new_window", "num_window")
+excludecols <- c(descriptcol, nullcol)
+training <- training[, !names(training) %in% excludecols]
+
+
+
+```
+#Random Forest Model:
+
+I used the random forest model because it is appropriate for this type of classification problem and because class lectures indicated that this model tends to be an accurate option, compared to other models.
+
+First we fit the model on the training data and then use the model to predict classe on the cross validation subset data.
+
+
+```{r setup5, include=TRUE}
+library(randomForest)
+set.seed(321)
+
+
+
+modelfit<-randomForest(classe~.,data=training, importance=TRUE,ntrees=10)
+print(modelfit)
+
+
+
+
+```
+
+#Model Validation
+
+We'll now test our model performance on both the training set and the cross validation set.
+
+```{r setup6, include=TRUE}
+
+ptraining<-predict(modelfit, training)
+print(confusionMatrix(ptraining, training$classe))
+```
+
+So our model performs very well against the training set, but we ned to cross-validate the performance against the withheld set and see if we have avoided overfitting.
+
+#Validation Set Accuracy (Out of Sample)
+
+How does our model perform on the withheld cross-validation set?
+
+```{r setup7, include=TRUE}
+
+pvalidation<-predict(modelfit,validation)
+print(confusionMatrix(pvalidation,validation$classe))
+
+```
+
+#Sample Error
+The cross validation accurancy is 0.9959 which is 99.6% so the out of sample error is 0.4%, so our model performs very well.
+
+#Applying our model to the final test set
+
+```{r setup8, include=TRUE}
+ptest<-predict(modelfit,testingdata)
+ptest
+```
+
+
+
